@@ -1,0 +1,76 @@
+From ea6ac7db447fc9f0cb339d16bc1bfcdeb1a18320 Mon Sep 17 00:00:00 2001
+From: Nio Azizudin <io.rvrse@gmail.com>
+Date: Sat, 7 Mar 2026 10:59:24 +0700
+Subject: [PATCH] add imx8 smmu stream id initialization This setups the stream
+ id table for the masters used in the bao linux+freertos demo. The reason for
+ this is that setting these is is very system configuration dependent, varying
+ given the number of guests and how these dma-capable peripherals are assigned
+ to each one.
+
+Ideally this would be done directly by bao through some kind of platform
+specific iommu_set_id function. Possibly this function could just call
+monitor could so that we don't have to add scu communication code to the
+hypervisor.
+---
+ plat/imx/imx8qm/imx8qm_bl31_setup.c | 10 ++++++++++
+ plat/imx/imx8qm/include/sid_rsrc.h  | 22 ++++++++++++++++++++++
+ 2 files changed, 32 insertions(+)
+ create mode 100644 plat/imx/imx8qm/include/sid_rsrc.h
+
+diff --git a/plat/imx/imx8qm/imx8qm_bl31_setup.c b/plat/imx/imx8qm/imx8qm_bl31_setup.c
+index 1c5b17775..32f9a6c97 100644
+--- a/plat/imx/imx8qm/imx8qm_bl31_setup.c
++++ b/plat/imx/imx8qm/imx8qm_bl31_setup.c
+@@ -30,6 +30,7 @@
+ #include <sec_rsrc.h>
+ #include <imx_sip_svc.h>
+ #include <string.h>
++#include <sid_rsrc.h>
+ 
+ #define TRUSTY_PARAMS_LEN_BYTES      (4096*2)
+ int data_section_restore_flag = 0x1;
+@@ -398,6 +399,15 @@ void mx8_partition_resources(void)
+ 	if (err)
+ 		ERROR("sc_rm_move_all: %u\n", err);
+ 
++	/* set master smmu stream ids */
++	for(i = 0; i < ARRAY_SIZE(sid_rsrcs); i++){
++		sc_rsrc_t rsrc = sid_rsrcs[i].rsrc;
++		sc_rm_sid_t sid = sid_rsrcs[i].sid;
++		err = sc_rm_set_master_sid(ipc_handle, rsrc, sid);
++		if (err) 
++			ERROR("sc_rm_set_master_sid: rsrc %u, ret %u\n", rsrc, err);
++	}
++
+ 	/* iterate through peripherals to give NS OS part access */
+ 	for (i = 0; i < ARRAY_SIZE(ns_access_allowed); i++) {
+ 		err = sc_rm_set_peripheral_permissions(ipc_handle, ns_access_allowed[i],
+diff --git a/plat/imx/imx8qm/include/sid_rsrc.h b/plat/imx/imx8qm/include/sid_rsrc.h
+new file mode 100644
+index 000000000..545eea891
+--- /dev/null
++++ b/plat/imx/imx8qm/include/sid_rsrc.h
+@@ -0,0 +1,22 @@
++/**
++ * TODO: license
++ */
++
++/**
++ * - Stream ids are 6-bit wide.
++ * - The stream id 0 is reserved as an smmu bypassable id.
++ * - When setting up the table for a given system configuration all of the bus 
++ *  masters intended for the same translation context (e.g. virtual machine)
++ *  should be configured with the same stream id as the number of stream match 
++ *  registers in MMU-500 is limited.
++ */
++
++struct {
++    sc_rsrc_t rsrc;
++    sc_rm_sid_t sid;
++} sid_rsrcs[] = {
++    {SC_R_DMA_0_CH12, 0x1},
++    {SC_R_DMA_0_CH13, 0x1},
++    {SC_R_ENET_0, 0x2},
++    {SC_R_SDHC_0, 0x3},
++};
+\ No newline at end of file

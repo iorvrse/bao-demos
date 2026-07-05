@@ -1,5 +1,7 @@
 # Linux Guest
 
+> For a Toradex reference minimal (Yocto based) image instead of buildroot, see [meta-tdx-bao](https://github.com/iorvrse/meta-tdx-bao). From there, after build the image, you can pick the tezi image and follow the [Tezi setup](./../../platforms/tezi.md)  and For the custom device tree, extract the Image.gz from the build output to get image binary and follow instructions [below](https://github.com/iorvrse/bao-demos/tree/apalis-imx8/guests/linux#build-the-device-tree-and-wrap-it-with-the-kernel-image)
+
 ## 1. Download the Linux kernel source
 
 Setup linux environment variables. Start by the demo resource directory:

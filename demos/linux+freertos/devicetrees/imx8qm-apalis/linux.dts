@@ -1,0 +1,662 @@
+/dts-v1/;
+
+/ {
+    #size-cells = <0x2>;
+    #address-cells = <0x2>;
+
+    cpus {
+        #size-cells = <0x0>;
+        #address-cells = <0x1>;
+
+        cpu@0 {
+            compatible = "arm,armv8";
+            device_type = "cpu";
+            enable-method = "psci";
+            reg = <0x0>;
+        };
+
+        cpu@1 {
+            compatible = "arm,armv8";
+            device_type = "cpu";
+            enable-method = "psci";
+            reg = <0x1>;
+        };
+    };
+
+    psci {
+        compatible = "arm,psci-0.2";
+        method = "smc";
+    };
+
+    memory@80200000 {
+        reg = <0x0 0x80200000 0x0 0x40000000>;
+        device_type = "memory";
+    };
+
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        /* * 64MB VPU Shield spanning 0x84000000 to 0x87FFFFFF
+         * Prevents ADMA errors and A53 SError Panics when systemd reads eMMC
+         */
+        vpu_shield: vpu-shield@84000000 {
+            reg = <0 0x84000000 0 0x4000000>;
+            no-map;
+        };
+
+        /*
+         * reserved-memory layout
+         * 0x8800_0000 ~ 0x8FFF_FFFF is reserved for M4
+         * Shouldn't be used at A core and Linux side.
+         */
+        m4_reserved: m4@88000000 {
+            reg = <0 0x88000000 0 0x8000000>;
+            no-map;
+        };
+
+        /* --- THE M4 FIREWALL PLUGS --- */
+        vdev0vring0: vdev0vring0@90000000 {
+            reg = <0 0x90000000 0 0x8000>;
+            no-map;
+        };
+
+        vdev0vring1: vdev0vring1@90008000 {
+            reg = <0 0x90008000 0 0x8000>;
+            no-map;
+        };
+
+        vdev1vring0: vdev1vring0@90010000 {
+            reg = <0 0x90010000 0 0x8000>;
+            no-map;
+        };
+
+        vdev1vring1: vdev1vring1@90018000 {
+            reg = <0 0x90018000 0 0x8000>;
+            no-map;
+        };
+
+        rsc_table0: rsc-table@900ff000 {
+            reg = <0 0x900ff000 0 0x1000>;
+            no-map;
+        };
+
+        vdev2vring0: vdev2vring0@90100000 {
+            reg = <0 0x90100000 0 0x8000>;
+            no-map;
+        };
+
+        vdev2vring1: vdev2vring1@90108000 {
+            reg = <0 0x90108000 0 0x8000>;
+            no-map;
+        };
+
+        vdev3vring0: vdev3vring0@90110000 {
+            reg = <0 0x90110000 0 0x8000>;
+            no-map;
+        };
+
+        vdev3vring1: vdev3vring1@90118000 {
+            reg = <0 0x90118000 0 0x8000>;
+            no-map;
+        };
+
+        rsc_table1: rsc-table@901ff000 {
+            reg = <0 0x901ff000 0 0x1000>;
+            no-map;
+        };
+
+        rpmsg_reserved: rpmsg@90200000 {
+            reg = <0 0x90200000 0 0x200000>;
+            no-map;
+        };
+
+        vdevbuffer: vdevbuffer@90400000 {
+            compatible = "shared-dma-pool";
+            reg = <0 0x90400000 0 0x100000>;
+            no-map;
+        };
+
+        decoder_rpc: decoder-rpc@92000000 {
+            reg = <0 0x92000000 0 0x200000>;
+            no-map;
+        };
+
+        dsp_reserved: dsp@92400000 {
+            reg = <0 0x92400000 0 0x2000000>;
+            no-map;
+        };
+
+        encoder1_rpc: encoder1-rpc@94400000 {
+            reg = <0 0x94400000 0 0x700000>;
+            no-map;
+        };
+
+        encoder2_rpc: encoder2-rpc@94b00000 {
+            reg = <0 0x94b00000 0 0x700000>;
+            no-map;
+        };
+
+        /* global autoconfigured region for contiguous allocations */
+        linux,cma {
+            compatible = "shared-dma-pool";
+            alloc-ranges = <0 0x80200000 0 0x40000000>;
+            linux,cma-default;
+            reusable;
+            size = <0 0x10000000>;
+        };
+    };
+
+    rpmsg0: rpmsg@90000000 {
+        compatible = "fsl,imx8qm-rpmsg";
+        mbox-names = "tx", "rx", "rxdb";
+        mboxes = <&lsio_mu5 0 1
+                  &lsio_mu5 1 1
+                  &lsio_mu5 3 1>;
+        mub-partition = <3>;
+        vdev-nums = <2>;
+        reg = <0 0x90000000 0 0x20000>;
+        memory-region = <&vdevbuffer>;
+        status = "okay";
+    };
+
+    rpmsg1: rpmsg@90100000 {
+        compatible = "fsl,imx8qm-rpmsg";
+        mbox-names = "tx", "rx", "rxdb";
+        mboxes = <&lsio_mu6 0 1
+                  &lsio_mu6 1 1
+                  &lsio_mu6 3 1>;
+        mub-partition = <4>;
+        vdev-nums = <2>;
+        reg = <0 0x90100000 0 0x20000>;
+        memory-region = <&vdevbuffer>;
+        status = "okay";
+    };
+
+    gic: intc@8000000 {
+        interrupts = <0x01 0x09 0x04>;
+        reg = <0x00 0x51a00000 0x00 0x10000 0x00 0x51b00000 0x00 0xf60000>;
+        #redistributor-regions = <0x01>;
+        compatible = "arm,gic-v3";
+        interrupt-controller;
+        #interrupt-cells = <0x03>;
+        interrupt-parent = <&gic>;
+    };
+
+    timer {
+        compatible = "arm,armv8-timer";
+        interrupt-parent = <&gic>;
+        interrupts = <0x1 0xd 0xf08 0x1 0xe 0xf08 0x1 0xb 0xf08 0x1 0xa 0xf08>;
+    };
+
+    conn_axi_clk: clock-conn-axi {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <333333333>;
+        clock-output-names = "conn_axi_clk";
+    };
+
+    conn_ahb_clk: clock-conn-ahb {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <166666666>;
+        clock-output-names = "conn_ahb_clk";
+    };
+
+    conn_ipg_clk: clock-conn-ipg {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <83333333>;
+        clock-output-names = "conn_ipg_clk";
+    };
+
+    dma_ipg_clk: clock-dma-ipg {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <120000000>;
+        clock-output-names = "dma_ipg_clk";
+    };
+
+    xtal32k: clock-xtal32k {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <32768>;
+        clock-output-names = "xtal_32KHz";
+    };
+
+    xtal24m: clock-xtal24m {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <24000000>;
+        clock-output-names = "xtal_24MHz";
+    };
+
+    lsio_mu1: mailbox@5d1c0000 {
+        compatible = "fsl,imx8qm-mu", "fsl,imx6sx-mu";
+        reg = <0x0 0x5d1c0000 0x0 0x10000>;
+        interrupt-parent = <&gic>;
+        interrupts = <0 177 4>;
+        #mbox-cells = <2>;
+        status = "okay";
+    };
+
+    lsio_mu5: mailbox@5d200000 {
+        compatible = "fsl,imx8qm-mu", "fsl,imx6sx-mu";
+        reg = <0x0 0x5d200000 0x0 0x10000>;
+        interrupt-parent = <&gic>;
+        interrupts = <0 184 4>;
+        #mbox-cells = <2>;
+        power-domains = <&pd 218>;
+        status = "okay";
+    };
+
+    lsio_mu6: mailbox@5d210000 {
+        compatible = "fsl,imx8qm-mu", "fsl,imx6sx-mu";
+        reg = <0x0 0x5d210000 0x0 0x10000>;
+        interrupt-parent = <&gic>;
+        interrupts = <0 185 4>;
+        #mbox-cells = <2>;
+        power-domains = <&pd 219>;
+        status = "okay";
+    };
+
+    lsio_gpio1: gpio@5d090000 {
+        compatible = "fsl,imx8qm-gpio", "fsl,imx35-gpio";
+        reg = <0x0 0x5d090000 0x0 0x10000>;
+        interrupt-parent = <&gic>;
+        interrupts = <0 137 4>;
+        gpio-controller;
+        #gpio-cells = <2>;
+        interrupt-controller;
+        #interrupt-cells = <2>;
+        power-domains = <&pd 200>;
+
+        gpio-line-names = "",
+                "",
+                "",
+                "",
+                "MXM3_286",
+                "",
+                "MXM3_87",
+                "MXM3_99",
+                "MXM3_138",
+                "MXM3_140",
+                "MXM3_239",
+                "",
+                "MXM3_281",
+                "MXM3_283",
+                "MXM3_126",
+                "MXM3_132",
+                "",
+                "",
+                "",
+                "",
+                "MXM3_173",
+                "MXM3_175",
+                "MXM3_123";
+    };
+
+    scu {
+        compatible = "fsl,imx-scu";
+
+        mbox-names = "tx0", "tx1", "tx2", "tx3",
+                     "rx0", "rx1", "rx2", "rx3",
+                     "gip3";
+
+        mboxes = <&lsio_mu1 0 0
+                  &lsio_mu1 0 1
+                  &lsio_mu1 0 2
+                  &lsio_mu1 0 3
+                  &lsio_mu1 1 0
+                  &lsio_mu1 1 1
+                  &lsio_mu1 1 2
+                  &lsio_mu1 1 3
+                  &lsio_mu1 3 3>;
+
+        pd: imx8qx-pd {
+            compatible = "fsl,imx8qm-scu-pd", "fsl,scu-pd";
+            #power-domain-cells = <1>;
+        };
+
+        clk: clock-controller {
+            compatible = "fsl,imx8qm-clk", "fsl,scu-clk";
+            #clock-cells = <2>;
+            clocks = <&xtal32k &xtal24m>;
+            clock-names = "xtal_32KHz", "xtal_24Mhz";
+        };
+
+        iomuxc: pinctrl {
+            compatible = "fsl,imx8qm-iomuxc";
+            pinctrl-names = "default";
+            pinctrl_fec1: fec1grp {
+                fsl,pins = <0xff 0x00 0x14a0>,
+                           <0xa6 0x00 0x6000020>,
+                           <0xa5 0x00 0x6000020>,
+                           <0xf4 0x00 0x6000020>,
+                           <0xf3 0x00 0x6000020>,
+                           <0xf5 0x00 0x6000020>,
+                           <0xf6 0x00 0x6000020>,
+                           <0xf7 0x00 0x6000020>,
+                           <0xf8 0x00 0x6000020>,
+                           <0xf9 0x00 0x6000020>,
+                           <0xfa 0x00 0x6000020>,
+                           <0xfb 0x00 0x6000020>,
+                           <0xfc 0x00 0x6000020>,
+                           <0xfd 0x00 0x6000020>,
+                           <0xfe 0x00 0x6000020>,
+                           <0xa7 0x00 0x6000020>,
+                           /* On-module ETH_RESET# */
+                           <0x39 0x03 0x6000020>,
+                           /* On-module ETH_INT# */
+                           <0x4d 0x03 0x4000060>;
+            };
+
+            pinctrl_fec1_sleep: fec1-sleepgrp {
+                fsl,pins = <0xff 0x00 0x000014a0>,
+                           <0xa6 0x03 0x04000040>,
+                           <0xa5 0x03 0x04000040>,
+                           <0xf4 0x03 0x04000040>,
+                           <0xf3 0x03 0x04000040>,
+                           <0xf5 0x03 0x04000040>,
+                           <0xf6 0x03 0x04000040>,
+                           <0xf7 0x03 0x04000040>,
+                           <0xf8 0x03 0x04000040>,
+                           <0xf9 0x03 0x04000040>,
+                           <0xfa 0x03 0x04000040>,
+                           <0xfb 0x03 0x04000040>,
+                           <0xfc 0x03 0x04000040>,
+                           <0xfd 0x03 0x04000040>,
+                           <0xfe 0x03 0x04000040>,
+                           <0xa7 0x03 0x04000040>,
+                           <0x39 0x03 0x06000020>,
+                           <0x4d 0x03 0x04000040>;
+            };
+
+            /* On-module eMMC */
+            pinctrl_usdhc1: usdhc1grp {
+                fsl,pins = <0xd1 0x00 0x06000041>,
+                           <0xd2 0x00 0x00000021>,
+                           <0xd3 0x00 0x00000021>,
+                           <0xd4 0x00 0x00000021>,
+                           <0xd5 0x00 0x00000021>,
+                           <0xd6 0x00 0x00000021>,
+                           <0xd7 0x00 0x00000021>,
+                           <0xd8 0x00 0x00000021>,
+                           <0xd9 0x00 0x00000021>,
+                           <0xda 0x00 0x00000021>,
+                           <0xdb 0x00 0x06000041>,
+                           <0xdc 0x00 0x00000021>;
+            };
+
+            pinctrl_usdhc1_100mhz: usdhc1-100mhzgrp {
+                fsl,pins = <0xd1 0x00 0x06000040>,
+                           <0xd2 0x00 0x00000020>,
+                           <0xd3 0x00 0x00000020>,
+                           <0xd4 0x00 0x00000020>,
+                           <0xd5 0x00 0x00000020>,
+                           <0xd6 0x00 0x00000020>,
+                           <0xd7 0x00 0x00000020>,
+                           <0xd8 0x00 0x00000020>,
+                           <0xd9 0x00 0x00000020>,
+                           <0xda 0x00 0x00000020>,
+                           <0xdb 0x00 0x06000040>,
+                           <0xdc 0x00 0x00000020>;
+            };
+
+            pinctrl_usdhc1_200mhz: usdhc1-200mhzgrp {
+                fsl,pins = <0xd1 0x00 0x06000040>,
+                           <0xd2 0x00 0x00000020>,
+                           <0xd3 0x00 0x00000020>,
+                           <0xd4 0x00 0x00000020>,
+                           <0xd5 0x00 0x00000020>,
+                           <0xd6 0x00 0x00000020>,
+                           <0xd7 0x00 0x00000020>,
+                           <0xd8 0x00 0x00000020>,
+                           <0xd9 0x00 0x00000020>,
+                           <0xda 0x00 0x00000020>,
+                           <0xdb 0x00 0x06000040>,
+                           <0xdc 0x00 0x00000020>;
+            };
+        };
+
+        ocotp: imx8qm-ocotp {
+            compatible = "fsl,imx8qm-scu-ocotp";
+            #address-cells = <1>;
+            #size-cells = <1>;
+            read-only;
+
+            fec_mac0: mac@1c4 {
+                reg = <0x1c4 6>;
+            };
+
+            fec_mac1: mac@1c6 {
+                reg = <0x1c6 6>;
+            };
+        };
+    };
+
+    enet0_lpcg: clock-controller@5b230000 {
+        compatible = "fsl,imx8qxp-lpcg";
+        reg = <0x0 0x5b230000 0x0 0x10000>;
+        #clock-cells = <1>;
+        clocks = <&clk 251 2>,
+                 <&clk 251 2>,
+                 <&conn_axi_clk>,
+                 <&clk 251 24>,
+                 <&conn_ipg_clk>,
+                 <&conn_ipg_clk>;
+        bit-offset = <0 4 8 12 16 20>;
+        clock-output-names = "enet0_lpcg_timer_clk",
+                             "enet0_lpcg_txc_sampling_clk",
+                             "enet0_lpcg_ahb_clk",
+                             "enet0_lpcg_rgmii_txc_clk",
+                             "enet0_lpcg_ipg_clk",
+                             "enet0_lpcg_ipg_s_clk";
+        power-domains = <&pd 251>;
+    };
+
+    lpuart1_lpcg: clock-controller@5a470000 {
+        compatible = "fsl,imx8qxp-lpcg";
+        reg = <0x0 0x5a470000 0x0 0x10000>;
+        #clock-cells = <1>;
+        clocks = <&clk 58 2>, <&dma_ipg_clk>;
+        bit-offset = <0 16>;
+        clock-output-names = "lpuart1_lpcg_ipg_clk", "lpuart1_lpcg_baud_clk";
+        power-domains = <&pd 58>;
+    };
+
+    sdhc0_lpcg: clock-controller@5b200000 {
+        compatible = "fsl,imx8qxp-lpcg";
+        reg = <0x0 0x5b200000 0x0 0x10000>;
+        #clock-cells = <1>;
+        clocks = <&clk 248 2>, <&conn_ipg_clk>, <&conn_axi_clk>;
+        bit-offset = <0 16 20>;
+        clock-output-names = "sdhc0_lpcg_per_clk",
+                             "sdhc0_lpcg_ipg_clk",
+                             "sdhc0_lpcg_ahb_clk";
+        power-domains = <&pd 248>;
+    };
+
+    usb3_lpcg: clock-controller@5b280000 {
+		compatible = "fsl,imx8qxp-lpcg";
+		reg = <0x0 0x5b280000 0x0 0x10000>;
+		#clock-cells = <1>;
+		bit-offset = <0 4 16 20 24 28>;
+		clocks = <&clk 262 2>,
+			 <&clk 262 4>,
+			 <&conn_ipg_clk>,
+			 <&conn_ipg_clk>,
+			 <&conn_ipg_clk>,
+			 <&clk 262 1>;
+		clock-output-names = "usb3_app_clk",
+				     "usb3_lpm_clk",
+				     "usb3_ipg_clk",
+				     "usb3_core_pclk",
+				     "usb3_phy_clk",
+				     "usb3_aclk";
+		power-domains = <&pd 263>;
+	};
+
+    fec1: ethernet@5b040000 {
+        compatible = "fsl,imx8qm-fec", "fsl,imx6sx-fec";
+        reg = <0x0 0x5b040000 0x0 0x10000>;
+        interrupt-parent = <&gic>;
+        interrupts = <0 258 4>,
+                     <0 256 4>,
+                     <0 257 4>,
+                     <0 259 4>;
+        clocks = <&enet0_lpcg 4>,
+                 <&enet0_lpcg 2>,
+                 <&enet0_lpcg 3>,
+                 <&enet0_lpcg 0>,
+                 <&enet0_lpcg 1>;
+        clock-names = "ipg", "ahb", "enet_clk_ref", "ptp", "enet_2x_txclk";
+        status = "okay";
+
+        assigned-clocks = <&clk 251 2>,
+                          <&clk 251 25>;
+        assigned-clock-rates = <250000000>, <125000000>;
+        fsl,num-tx-queues=<3>;
+        fsl,num-rx-queues=<3>;
+        power-domains = <&pd 251>;
+
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_fec1>;
+        pinctrl-1 = <&pinctrl_fec1_sleep>;
+        phy-mode = "rgmii-id";
+        phy-handle = <&ethphy0>;
+        fsl,magic-packet;
+        fsl,mii-exclusive;
+        mdio {
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            ethphy0: ethernet-phy@0 {
+                compatible = "ethernet-phy-ieee802.3-c22";
+                reg = <7>;
+                interrupt-parent = <&lsio_gpio1>;
+                interrupts = <29 8>;
+                micrel,led-mode = <0>;
+                reset-assert-us = <2>;
+                reset-deassert-us = <2>;
+                reset-gpios = <&lsio_gpio1 11 1>;
+                reset-names = "phy-reset";
+            };
+        };
+    };
+
+    lpuart1: serial@5a070000 {
+        compatible = "fsl,imx8qm-lpuart", "fsl,imx8qxp-lpuart",
+                    "fsl,imx7ulp-lpuart";
+        reg = <0x0 0x5a070000 0x0 0x1000>;
+        interrupts = <0 346 4>;
+        interrupt-parent = <&gic>;
+        clocks = <&lpuart1_lpcg 1>, <&lpuart1_lpcg 0>;
+        clock-names = "ipg", "baud";
+        assigned-clocks = <&clk 58 2>;
+        assigned-clock-rates = <80000000>;
+        power-domains = <&pd 58>;
+        status = "okay";
+    };
+
+    usdhc1: mmc@5b010000 {
+        compatible = "fsl,imx8qm-usdhc", "fsl,imx8qxp-usdhc";
+        reg = <0x0 0x5b010000 0x0 0x10000>;
+        interrupts = <0 232 4>;
+        interrupt-parent = <&gic>;
+        clocks = <&sdhc0_lpcg 1>, <&sdhc0_lpcg 2>, <&sdhc0_lpcg 0>;
+        clock-names = "ipg", "ahb", "per";
+        assigned-clocks = <&clk 248 2>;
+        assigned-clock-rates = <400000000>;
+        power-domains = <&pd 248>;
+        fsl,tuning-start-tap = <20>;
+        fsl,tuning-step = <2>;
+
+        pinctrl-names = "default", "state_100mhz", "state_200mhz";
+        pinctrl-0 = <&pinctrl_usdhc1>;
+        pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+        pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+
+        broken-adma2;
+        no-sdma;
+
+        bus-width = <8>;
+        non-removable;
+        status = "okay";
+    };
+
+    usbotg3: usb@5b110000 {
+		compatible = "fsl,imx8qm-usb3";
+		reg = <0x0 0x5b110000 0x0 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		clocks = <&usb3_lpcg 1>,
+			 <&usb3_lpcg 0>,
+			 <&usb3_lpcg 5>,
+			 <&usb3_lpcg 2>,
+			 <&usb3_lpcg 3>;
+        clock-names = "usb3_lpm_clk", "usb3_bus_clk", "usb3_aclk",
+                    "usb3_ipg_clk", "usb3_core_pclk";
+        assigned-clocks = <&clk 262 1>;
+        assigned-clock-rates = <250000000>;
+		power-domains = <&pd 262>;
+		status = "okay";
+
+		usbotg3_cdns3: usb@5b120000 {
+			compatible = "cdns,usb3";
+			reg = <0x5b120000 0x10000>, /* memory area for OTG/DRD registers */
+			      <0x5b130000 0x10000>, /* memory area for HOST registers */
+			      <0x5b140000 0x10000>; /* memory area for DEVICE registers */
+			reg-names = "otg", "xhci", "dev";
+			interrupt-parent = <&gic>;
+			interrupts = <0 271 4>,
+				     <0 271 4>,
+				     <0 271 4>,
+				     <0 271 4>;
+			interrupt-names = "host", "peripheral", "otg", "wakeup";
+			phys = <&usb3_phy>;
+			phy-names = "cdns3,usb3-phy";
+			cdns,on-chip-buff-size = /bits/ 16 <18>;
+			status = "okay";
+		};
+	};
+
+	usb3_phy: usb-phy@5b160000 {
+		compatible = "nxp,salvo-phy";
+		reg = <0x0 0x5b160000 0x0 0x40000>;
+		clocks = <&usb3_lpcg 4>;
+		clock-names = "salvo_phy_clk";
+		power-domains = <&pd 263>;
+		#phy-cells = <0>;
+		status = "okay";
+	};
+
+    bao-ipc@f0000000 {
+        compatible = "bao,ipcshmem";
+        reg = <0x0 0xf0000000 0x0 0x00010000>;
+        read-channel = <0x0 0x2000>;
+        write-channel = <0x2000 0x2000>;
+        interrupts = <0 52 1>;
+        interrupt-parent = <&gic>;
+        id = <0>;
+    };
+
+    aliases {
+        ethernet0 = &fec1;
+        mmc0 = &usdhc1;
+        serial1 = &lpuart1;
+        mu1 = &lsio_mu1;
+    };
+
+    chosen {
+        bootargs = "clk_ignore_unused"
+            "ip=10.252.62.55::10.252.62.1:255.255.255.0::eth0:off "
+            "carrier_timeout=0 console=ttyLP1,115200 earlycon "
+            "fw_devlink=permissive root=/dev/mmcblk0p2 rootwait rw "
+            "random.trust_cpu=1";
+
+        stdout-path = &lpuart1;
+    };
+};
